@@ -1,42 +1,22 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "artifacts/api-server/src/app.ts",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 30,
-        "includeFiles": [
-          "artifacts/api-server/**",
-          "lib/**"
-        ]
-      }
-    },
-    {
-      "src": "artifacts/nutrirecover/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "outputDirectory": "dist/public",
-        "buildCommand": "pnpm install --frozen-lockfile --prefer-offline && pnpm build"
-      }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/nutrirecover build",
+  "outputDirectory": "artifacts/nutrirecover/dist/public",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30,
+      "includeFiles": [
+        "artifacts/api-server/**",
+        "lib/**"
+      ]
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/api",
-      "dest": "/artifacts/api-server/src/app.ts",
-      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/artifacts/api-server/src/app.ts",
-      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/artifacts/nutrirecover/dist/public/index.html",
-      "methods": ["GET"],
-      "status": 200
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

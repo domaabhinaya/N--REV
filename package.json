@@ -2,6 +2,9 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "preinstall": "node -e \"process.exit(0)\"",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
