@@ -1,27 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FoodRow } from "@workspace/db";
-import { assertPrimaryRefinedOnly, matchesCuisine, filterByCuisine } from "./food-lookup";
+import { matchesCuisine, filterByCuisine } from "./food-lookup";
 import { selectRecoveryDatasetSource, hasExplicitCuisine, resolveCuisine } from "./cuisine";
+import { foodSlug, inferCuisineTags, buildFoodsFromRows } from "./seed";
 import type { NutrientKey } from "./recovery-engine";
 import type { PlannerFood } from "./meal-planner";
 import { generateRecoveryPlan } from "./meal-planner";
 
 // ===========================================================================
-// PERMANENT BUSINESS RULE test coverage for the recovery-plan dataset source.
+// PERMANENT BUSINESS RULE test coverage for the recovery-plan candidate source.
 //
-// There are exactly two dataset-selection modes:
+// There are exactly two recovery modes:
 //
-//   MODE 1 — NO CUISINE SELECTED  => PRIMARY REFINED FOOD DATASET ONLY.
-//            The secondary dataset must never be used as a source, a fallback,
-//            a ranking source, a nutrition fallback, or an automatic expansion.
+//   MODE 1 — NO CUISINE SELECTED => the FULL imported food pool is eligible and
+//            flows straight to diet/allergy/meal/nutrition ranking. No cuisine
+//            filter is activated, and nothing is reduced to a smaller pool.
 //
-//   MODE 2 — EXPLICIT CUISINE     => PRIMARY + SECONDARY combined into one food
-//            pool, then filtered to the resolved cuisine, then the existing
-//            diet/allergy/meal/nutrition filters and recovery ranking.
+//   MODE 2 — EXPLICIT CUISINE    => the FULL imported pool is filtered to the
+//            resolved cuisine, then the existing diet/allergy/meal/nutrition
+//            filters and recovery ranking run downstream.
 //
-// These tests exercise the pure, authoritative source-selection, cuisine-filter
-// and provenance guard logic without touching a live database.
+// These tests exercise the pure source-selection and cuisine-filter logic
+// without touching a live database.
 // ===========================================================================
 
 const ZERO = {
@@ -80,60 +81,57 @@ const PRIMARY_ASIAN = food(3, "Vegetable Stir Fry", "primary", 10, ["asian"]);
 const SECONDARY_ASIAN = food(4, "Miso Soup", "extended", 6, ["asian"]);
 const NON_VEG_INDIAN = food(5, "Chicken Curry", "extended", 25, ["north_indian"], ["non_vegetarian"]);
 
-// TEST 11 verification — dataset source / provenance:
-//   * every food entering the pool must be primary-refined (tier === "primary");
-//   * a secondary (extended) food that reaches the pool is a hard error, so the
-//     secondary dataset can never silently appear in a no-cuisine plan.
-test("assertPrimaryRefinedOnly accepts a primary-only pool", () => {
-  const pool = [food(1, "Dal", "primary"), food(2, "Spinach", "primary")];
-  const out = assertPrimaryRefinedOnly(pool);
-  assert.equal(out.length, 2);
-  assert.ok(out.every((f) => f.tier === "primary"));
+// MODE 1 — NO CUISINE must use the FULL imported pool (both tiers eligible);
+// it never silently activates a cuisine filter or reduces the pool.
+test("no cuisine applies NO cuisine filter to the full pool (both tiers eligible)", () => {
+  const fullPool = [PRIMARY_INDIAN, SECONDARY_INDIAN, PRIMARY_ASIAN, SECONDARY_ASIAN];
+  const sources = fullPool.map((f) => selectRecoveryDatasetSource(undefined));
+  assert.ok(sources.every((s) => s === "full-pool"));
+  assert.deepEqual(filterByCuisine(fullPool, resolveCuisine("Indian")).map((f) => f.name).sort(), ["Moong Dal", "Sambar"]);
+
+  // A no-cuisine plan can already include secondary foods (the full pool feeds it).
+  const plan = generateRecoveryPlan(fullPool as unknown as PlannerFood[], "vegetarian", null, [], TARGETS, undefined, 1);
+  const dayFoods = plan.days.flatMap((d) => [...d.breakfast, ...d.lunch, ...d.dinner, ...d.snacks].map((i) => i.name));
+  assert.ok(dayFoods.length > 0, "no-cuisine plan has meals from the full pool");
 });
 
-test("assertPrimaryRefinedOnly rejects any secondary/extended food (provenance)", () => {
-  const pool = [food(1, "Dal", "primary"), food(2, "Secondary Dish", "extended")];
-  assert.throws(() => assertPrimaryRefinedOnly(pool), /non-primary food/);
-});
-
-// TEST 9: no cuisine + recovery requirements — primary foods are still ranked
-// by the existing recovery/nutritional logic when the candidate pool is pure
-// primary-refined.
-test("no cuisine: primary-only pool is still ranked by recovery/nutritional logic", () => {
-  const primary = [
+// TEST 9: no cuisine + recovery requirements — foods are still ranked by the
+// existing recovery/nutritional logic over the full eligible pool.
+test("no cuisine: foods are ranked by recovery/nutritional logic", () => {
+  const pool = [
     food(1, "Low Protein Food", "primary", 1),
     food(2, "High Protein Food", "primary", 30),
+    food(3, "High Protein Secondary", "extended", 40),
   ] as unknown as PlannerFood[];
 
-  // nutrient priority for protein is "high" so higher-protein primary food ranks first.
-  const plan = generateRecoveryPlan(primary, "vegetarian", null, [
+  const plan = generateRecoveryPlan(pool, "vegetarian", null, [
     { nutrient: "protein", priority: "high", score: 3, dailyTarget: 50, unit: "g", foodSources: [], reasons: [] },
   ], TARGETS, undefined, 1);
   const names = [...plan.days[0].breakfast, ...plan.days[0].lunch, ...plan.days[0].dinner, ...plan.days[0].snacks]
     .map((i) => i.name);
-  assert.ok(names.includes("High Protein Food"));
+  assert.ok(names.includes("High Protein Secondary"), "highest-protein food (extended tier) ranks in a no-cuisine plan");
 });
 
-// no cuisine must mean primary-refined source (never "combined"/secondary).
-test("no cuisine resolves to primary-refined source", () => {
+// no cuisine uses the full imported pool with no cuisine filter.
+test("no cuisine resolves to the full-pool source (no cuisine filter)", () => {
   assert.equal(hasExplicitCuisine(undefined), false);
-  assert.equal(selectRecoveryDatasetSource(undefined), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(null), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(""), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource("   "), "primary-refined");
+  assert.equal(selectRecoveryDatasetSource(undefined), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(null), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(""), "full-pool");
+  assert.equal(selectRecoveryDatasetSource("   "), "full-pool");
 });
 
-// explicit cuisine now uses the COMBINED primary+secondary source.
-test("explicit cuisine resolves to the combined primary+secondary source", () => {
+// explicit cuisine filters the full imported pool to the selected cuisine.
+test("explicit cuisine filters the full imported pool to the selected cuisine", () => {
   assert.equal(hasExplicitCuisine("Asian"), true);
-  assert.equal(selectRecoveryDatasetSource("Indian"), "combined");
-  assert.equal(selectRecoveryDatasetSource("North Indian"), "combined");
-  assert.equal(selectRecoveryDatasetSource("South Indian"), "combined");
-  assert.equal(selectRecoveryDatasetSource("Asian"), "combined");
+  assert.equal(selectRecoveryDatasetSource("Indian"), "cuisine-filtered");
+  assert.equal(selectRecoveryDatasetSource("North Indian"), "cuisine-filtered");
+  assert.equal(selectRecoveryDatasetSource("South Indian"), "cuisine-filtered");
+  assert.equal(selectRecoveryDatasetSource("Asian"), "cuisine-filtered");
 });
 
 // ===========================================================================
-// MODE 2 — EXPLICIT CUISINE uses the combined (primary + secondary) pool,
+// MODE 2 — EXPLICIT CUISINE uses the full imported pool,
 // filtered to the resolved cuisine, then the existing recovery filters/ranking.
 // ===========================================================================
 
@@ -167,7 +165,7 @@ test("explicit non-Indian cuisine (Asian): combined + Asian filter, never replac
   assert.ok(names.includes("Miso Soup"), "secondary Asian food retained");
   assert.ok(!names.includes("Moong Dal"), "Indian food excluded from Asian filter");
   assert.ok(!names.includes("Sambar"), "South Indian food excluded from Asian filter");
-  assert.equal(selectRecoveryDatasetSource("Asian"), "combined");
+  assert.equal(selectRecoveryDatasetSource("Asian"), "cuisine-filtered");
 });
 
 // TEST F — case normalization: all spellings resolve identically through the
@@ -227,41 +225,34 @@ test("explicit Western: secondary food classified via upstream source metadata i
 });
 
 // ===========================================================================
-// MODE 1 — NO CUISINE remains PRIMARY REFINED ONLY (regression protection).
+// MODE 1 — NO CUISINE uses the FULL imported pool (no cuisine filter).
 // ===========================================================================
 
-// TEST A/B/C — every no-cuisine shape must resolve to primary-refined and can
-// never pull in a secondary food.
-test("no cuisine (undefined) stays primary-refined; secondary food in the pool is a hard error", () => {
+// TEST A/B/C — every no-cuisine shape uses the full pool with no cuisine filter.
+test("no cuisine (undefined) uses the FULL imported pool; no cuisine filter", () => {
   assert.equal(hasExplicitCuisine(undefined), false);
-  assert.equal(selectRecoveryDatasetSource(undefined), "primary-refined");
-  assert.throws(() => assertPrimaryRefinedOnly([SECONDARY_ASIAN]), /non-primary food/);
+  assert.equal(selectRecoveryDatasetSource(undefined), "full-pool");
 });
 
-test("empty cuisine stays primary-refined; secondary food in the pool is a hard error", () => {
+test("empty cuisine uses the FULL imported pool; no cuisine filter", () => {
   assert.equal(hasExplicitCuisine(""), false);
-  assert.equal(selectRecoveryDatasetSource(""), "primary-refined");
-  assert.throws(() => assertPrimaryRefinedOnly([SECONDARY_INDIAN]), /non-primary food/);
+  assert.equal(selectRecoveryDatasetSource(""), "full-pool");
 });
 
-test("whitespace cuisine stays primary-refined; secondary food in the pool is a hard error", () => {
+test("whitespace cuisine uses the FULL imported pool; no cuisine filter", () => {
   assert.equal(hasExplicitCuisine("   "), false);
-  assert.equal(selectRecoveryDatasetSource("   "), "primary-refined");
-  assert.throws(() => assertPrimaryRefinedOnly([SECONDARY_ASIAN]), /non-primary food/);
+  assert.equal(selectRecoveryDatasetSource("   "), "full-pool");
 });
 
-// TEST J — CRITICAL regression: implementing the combined explicit-cuisine mode
-// must NOT contaminate the default no-cuisine path.
-test("REGRESSION: no-cuisine path is still primary refined ONLY after combined mode", () => {
+// TEST J — CRITICAL regression: no-cuisine never activates a cuisine filter and
+// never reduces the pool; explicit cuisine filters the full pool.
+test("REGRESSION: no-cuisine path uses the full pool and never activates a cuisine filter", () => {
   for (const v of [undefined, null, "", "   ", " \t\n "]) {
-    assert.equal(selectRecoveryDatasetSource(v), "primary-refined", `source for ${JSON.stringify(v)}`);
+    assert.equal(selectRecoveryDatasetSource(v), "full-pool", `source for ${JSON.stringify(v)}`);
   }
   // explicit and no-cuisine are truly distinct:
-  assert.equal(selectRecoveryDatasetSource(undefined), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource("Indian"), "combined");
-  // the runtime provenance guard still rejects any secondary food:
-  const combined = [food(1, "Dal", "primary"), food(2, "Secondary Dish", "extended")];
-  assert.throws(() => assertPrimaryRefinedOnly(combined), /non-primary food/);
+  assert.equal(selectRecoveryDatasetSource(undefined), "full-pool");
+  assert.equal(selectRecoveryDatasetSource("Indian"), "cuisine-filtered");
 });
 // ===========================================================================
 // STEP 5 / 6 — CUISINE CLASSIFICATION PRECISION (regression protection).

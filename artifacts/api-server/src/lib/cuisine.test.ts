@@ -81,13 +81,13 @@ test("cuisineStatement embeds the resolved cuisine (AI requirement)", () => {
 // ===========================================================================
 //
 // PERMANENT BUSINESS RULE:
-//   "WHEN THE USER DOES NOT EXPLICITLY SELECT A CUISINE, N-REV GENERATES THE
-//    RECOVERY PLAN EXCLUSIVELY FROM THE PRIMARY REFINED FOOD DATASET. THE
-//    SECONDARY DATASET MUST NOT BE USED AS A SOURCE OR FALLBACK FOR THAT
-//    REQUEST."
+//   "WHEN THE USER DOES NOT EXPLICITLY SELECT A CUISINE, N-REV BUILDS THE
+//    RECOVERY POOL FROM THE FULL IMPORTED FOOD DATASET WITHOUT A CUISINE
+//    FILTER. A CUISINE FILTER IS ONLY APPLIED FOR AN EXPLICITLY SELECTED,
+//    SUPPORTED CUISINE."
 //
 // TEST 1..5: every "no cuisine" shape must be recognised as NO cuisine selected
-// (and therefore resolve to the primary-refined dataset source).
+// (and therefore use the full imported pool with no cuisine filter).
 test("no cuisine field / undefined / null / empty / whitespace -> NOT an explicit cuisine", () => {
   // TEST 1: no cuisine field (omitted)
   assert.equal(hasExplicitCuisine(undefined), false);
@@ -105,13 +105,13 @@ test("no cuisine field / undefined / null / empty / whitespace -> NOT an explici
   assert.equal(hasExplicitCuisine(noCuisineProfile.cuisinePreference), false);
 });
 
-test("every 'no cuisine' shape resolves to the PRIMARY-refined dataset source", () => {
-  assert.equal(selectRecoveryDatasetSource(undefined), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(null), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(""), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource("   "), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(" \t\n "), "primary-refined");
-  assert.equal(selectRecoveryDatasetSource(123), "primary-refined");
+test("every 'no cuisine' shape uses the FULL imported pool with no cuisine filter", () => {
+  assert.equal(selectRecoveryDatasetSource(undefined), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(null), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(""), "full-pool");
+  assert.equal(selectRecoveryDatasetSource("   "), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(" \t\n "), "full-pool");
+  assert.equal(selectRecoveryDatasetSource(123), "full-pool");
 });
 
 // ===========================================================================
@@ -142,15 +142,15 @@ test("canonicalCuisine: an explicit supported cuisine is persisted canonically",
   assert.notEqual(canonicalCuisine("Indian"), canonicalCuisine(undefined));
 });
 
-// TEST 6: an explicit cuisine is recognised as explicit.
-test("explicit cuisine resolves to the combined primary+secondary source", () => {
+// TEST 6: an explicit cuisine is recognised as explicit and filters the full pool.
+test("explicit cuisine filters the full imported pool to that cuisine", () => {
   for (const c of ["Indian", "North Indian", "South Indian", "Asian", "Western", "Global", "Mediterranean", "Mexican"]) {
     assert.equal(hasExplicitCuisine(c), true, `expected hasExplicitCuisine(${c}) to be true`);
-    assert.equal(selectRecoveryDatasetSource(c), "combined", `explicit cuisine (${c}) uses the combined primary+secondary source`);
+    assert.equal(selectRecoveryDatasetSource(c), "cuisine-filtered", `explicit cuisine (${c}) filters the full pool`);
   }
   // case/space insensitive like the rest of the module
   assert.equal(hasExplicitCuisine("  ASIAN  "), true);
   assert.equal(hasExplicitCuisine("north_indian"), true);
-  assert.equal(selectRecoveryDatasetSource("  ASIAN  "), "combined");
-  assert.equal(selectRecoveryDatasetSource("north_indian"), "combined");
+  assert.equal(selectRecoveryDatasetSource("  ASIAN  "), "cuisine-filtered");
+  assert.equal(selectRecoveryDatasetSource("north_indian"), "cuisine-filtered");
 });

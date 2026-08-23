@@ -10,7 +10,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/lib/cuisine.test.ts src/lib/meal-planner.test.ts src/lib/dataset-source.test.ts src/lib/weekly-nutrient-keys.test.ts"
+    "test": "tsx --test src/lib/cuisine.test.ts src/lib/meal-planner.test.ts src/lib/dataset-source.test.ts src/lib/seed-import-contract.test.ts src/lib/weekly-nutrient-keys.test.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

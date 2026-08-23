@@ -79,8 +79,9 @@ export function isSupportedCuisine(value: unknown): boolean {
  *
  * This is REQUIRED so the profile row can preserve the distinction the two
  * dataset-selection modes depend on:
- *   - `null`  → MODE 1: no cuisine selected → PRIMARY REFINED dataset only.
- *   - a value → MODE 2: explicit cuisine   → PRIMARY + SECONDARY combined.
+ * This keeps the profile row able to distinguish the two recovery modes:
+ *   - `null`  → MODE 1: no explicit cuisine → full imported pool, no cuisine filter.
+ *   - a value → MODE 2: explicit cuisine   → full imported pool filtered to it.
  *
  * A missing / undefined / null / empty / whitespace / otherwise invalid cuisine
  * always yields `null` (="no cuisine selected"), so the secondary dataset can
@@ -100,9 +101,10 @@ export function canonicalCuisine(value: unknown): SupportedCuisine | null {
  *   - a missing cuisine field / a cuisine that was never chosen
  *   - an otherwise invalid / unsupported value
  *
- * IMPORTANT: an absent cuisine is NOT "all cuisines" and NOT "combine all
- * datasets". The backend must be able to distinguish "no cuisine selected" from
- * "an explicitly selected cuisine" so dataset source selection can be correct.
+ * IMPORTANT: an absent cuisine is NOT "all cuisines" and NOT a free pass to
+ * ignore eligibility. The backend keeps the distinction so that recovery can
+ * use the full pool without a cuisine filter (MODE 1) vs. filtering the full
+ * pool to the selected cuisine (MODE 2).
  */
 export function hasExplicitCuisine(value: unknown): boolean {
   return isSupportedCuisine(value);
@@ -116,34 +118,47 @@ export function hasExplicitCuisine(value: unknown): boolean {
  * plan?" shared by every recovery-plan code path. It centralises the rule so a
  * frontend check, an API check, and a planner check can never disagree.
  */
-export type RecoveryDatasetSource = "primary-refined" | "combined";
-
 /**
- * The single authoritative resolver for the recovery-plan dataset source.
+ * The authoritatively chosen recovery-plan candidate dataset & filter mode.
  *
- * PERMANENT BUSINESS RULE — two dataset-selection modes:
+ * PERMANENT BUSINESS RULE — two recovery modes:
  *
  * MODE 1 (NO CUISINE):
  *   When the user has NOT explicitly selected a cuisine (undefined / null /
- *   empty string / whitespace / missing / invalid), the recovery plan is
- *   generated EXCLUSIVELY from the PRIMARY REFINED FOOD DATASET. The secondary
- *   (extended) dataset must not be used as a source, a fallback, a ranking
- *   source, a nutrition fallback, or an automatic expansion for that request.
+ *   empty string / whitespace / missing / invalid), the recovery pool is the
+ *   FULL imported food dataset. No cuisine filter is activated.
  *
  * MODE 2 (EXPLICIT CUISINE):
- *   When the user HAS explicitly selected a valid, supported cuisine, the
- *   recovery plan may draw from BOTH datasets:
- *       PRIMARY + SECONDARY → COMBINED POOL → CUISINE FILTER → existing filters.
- *   The secondary dataset participates ONLY in the explicit-cuisine path.
+ *   When the user HAS explicitly selected a valid, supported cuisine, the FULL
+ *   imported dataset is first filtered to the resolved cuisine, then the
+ *   existing diet / allergy / meal / nutrient filters and ranking run
+ *   downstream. A selected cuisine is never silently replaced with the default.
+ */
+export type RecoveryDatasetSource = "full-pool" | "cuisine-filtered";
+
+/**
+ * Whether a recovery request applies an explicit-cuisine filter to the FULL
+ * imported food dataset.
+ *
+ * PERMANENT BUSINESS RULE — two recovery modes:
+ *
+ * MODE 1 (NO CUISINE):
+ *   When the user has NOT explicitly selected a cuisine (undefined / null /
+ *   empty string / whitespace / missing / unrecognised), the FULL imported
+ *   dataset is eligible and no cuisine filter is applied.
+ *
+ * MODE 2 (EXPLICIT CUISINE):
+ *   When the user HAS explicitly selected a valid supported cuisine, the FULL
+ *   imported dataset is filtered to the resolved cuisine before the existing
+ *   diet / allergy / meal / nutrient filters and ranking run.
  */
 export function selectRecoveryDatasetSource(cuisine: unknown): RecoveryDatasetSource {
   if (!hasExplicitCuisine(cuisine)) {
-    // MODE 1 — no cuisine selected => PRIMARY REFINED DATASET ONLY.
-    return "primary-refined";
+    // MODE 1 — no cuisine selected => full pool, no cuisine filter.
+    return "full-pool";
   }
-  // MODE 2 — an explicit, valid cuisine is selected => combined primary +
-  // secondary pool is eligible (it is then filtered to the selected cuisine).
-  return "combined";
+  // MODE 2 — explicit cuisine => full pool filtered to the selected cuisine.
+  return "cuisine-filtered";
 }
 
 /**
