@@ -22,7 +22,7 @@ function getConnectionString(): string {
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl || !rawUrl.trim()) {
     throw new Error(
-      "DATABASE_URL must be set (e.g., a Neon/Postgres connection string) before querying the database.",
+      "DATABASE_URL must be set (e.g., a PostgreSQL/Supabase connection string) before querying the database.",
     );
   }
 

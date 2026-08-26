@@ -38,7 +38,7 @@ Backend
 - Node.js (TypeScript), Express
 
 Database
-- PostgreSQL (Neon), Drizzle ORM (schema in `lib/db`)
+- PostgreSQL (via a managed provider such as Supabase, or local Docker for development), Drizzle ORM (schema in `lib/db`)
 
 Data
 - 15-nutrient model (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
@@ -117,15 +117,17 @@ cp .env.example .env
 
 | Variable | Where used | Purpose |
 |---|---|---|
-| `DATABASE_URL` | api-server | PostgreSQL connection (required) |
+| `DATABASE_URL` | api-server / Drizzle (`lib/db`) | PostgreSQL connection (required) |
 | `PORT` | api-server | Backend listen port |
-| `NODE_ENV` | api-server | `development` \| `production` |
-| `JWT_SECRET` | api-server | Session/JWT signing |
-| `GROQ_API_KEY` | api-server | Optional (AI assistant backend) |
-| `OPENAI_API_KEY` | api-server | Optional (AI assistant backend) |
-| `PORT` | nutrirecover (Vite) | Frontend dev port (default `5174`) |
+| `NODE_ENV` | api-server / Vite | `development` \| `production` |
+| `LOG_LEVEL` | api-server | Pino log level (default `info`) |
+| `ADMIN_SECRET_KEY` | api-server | Shared key guarding `/api/admin/*` (403 when unset) |
+| `VITE_API_TARGET` / `API_URL` | nutrirecover (Vite dev) | Backend URL the dev server proxies `/api` to |
+| `BASE_PATH` | nutrirecover (Vite) | Frontend base path (default `/`) |
 
-> Secrets must never be committed. `.env` is git-ignored; only `.env.example` is tracked.
+> Secrets must never be committed. `.env` and database dumps (`*.sql`) are git-ignored; only `.env.example` is tracked.
+
+**Production (Vercel):** The database variable is `DATABASE_URL`. On Vercel it is supplied as a Project Environment Variable pointing to your managed PostgreSQL (e.g. Supabase). The production app has **no** dependency on local Docker, `localhost`, or committed `.env` files.
 
 ## Local Development
 

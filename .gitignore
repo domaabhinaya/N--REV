@@ -18,6 +18,14 @@ node_modules
 .env.local
 .env.*.local
 
+# Database dumps and local DB files - NEVER commit
+*.sql
+*.sql.gz
+*.dump
+*.db
+*.sqlite
+*.sqlite3
+
 # Runtime / logs / coverage / caches
 *.log
 npm-debug.log*
