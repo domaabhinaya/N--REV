@@ -1,0 +1,7 @@
+{
+  "verified_foods": 82073,
+  "original_columns_per_food": 49,
+  "numeric_values_equal": true,
+  "source_values_equal_after_blank_and_line_ending_normalization": true,
+  "line_ending_equivalent_cells": 1
+}

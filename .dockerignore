@@ -1,0 +1,13 @@
+# Keep local state and all secrets out of the Docker build context.
+.git
+.env
+.env.*
+node_modules
+**/node_modules
+**/dist
+*.log
+*.tsbuildinfo
+
+# The production container reads the imported PostgreSQL dataset. It never
+# imports XLSX source files at startup.
+*.xlsx

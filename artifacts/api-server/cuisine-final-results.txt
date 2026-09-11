@@ -1,0 +1,21 @@
+✔ Indian is the permanent default cuisine (missing values) (1.7393ms)
+✔ empty / whitespace cuisine resolves to Indian (0.3082ms)
+✔ invalid / arbitrary cuisine resolves to Indian (0.2123ms)
+✔ a valid selected cuisine is NEVER silently replaced with Indian (0.2173ms)
+✔ resolution is case-insensitive and separator-normalised (0.1643ms)
+✔ all supported cuisines round-trip; unrecognised values are rejected (0.1571ms)
+✔ normalizeCuisine handles non-strings and trims (0.1366ms)
+✔ cuisineStatement embeds the resolved cuisine (AI requirement) (0.6181ms)
+✔ no cuisine field / undefined / null / empty / whitespace -> NOT an explicit cuisine (0.1746ms)
+✔ every no-cuisine shape selects a cuisine-filtered pool (0.2358ms)
+✔ canonicalCuisine: no-cuisine / invalid values are persisted as null (never 'Indian') (0.1491ms)
+✔ canonicalCuisine: an explicit supported cuisine is persisted canonically (0.1959ms)
+✔ explicit cuisine filters the full imported pool to that cuisine (0.2962ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 957.0524
