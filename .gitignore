@@ -75,3 +75,7 @@ _tc*.txt
 _bundle_err.txt
 _restart_backend.ps1
 typecheck-final.txt
+
+/data/foods-refined.jsonl
+/data/metadata-review.jsonl
+/data/duplicate-review.jsonl
