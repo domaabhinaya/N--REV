@@ -1,14 +1,13 @@
+import { lazy, Suspense } from "react";
 import { useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   useGetDashboard,
   useGetProfile,
   useGetDailySummary,
-  useGetSuggestions,
   getGetDashboardQueryKey,
   getGetProfileQueryKey,
   getGetDailySummaryQueryKey,
-  getGetSuggestionsQueryKey,
 } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,8 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp, Calendar, Target, Utensils, Clock, AlertCircle, CheckCircle2, FileText, ShoppingCart, Download } from "lucide-react";
+
+// recharts is heavy (~1.2 MB); it is loaded on demand only when the weekly
+// progress chart is rendered, so dashboard first paint is not blocked.
+const NutrientProgressChart = lazy(() => import("@/components/NutrientProgressChart"));
+
+function ChartFallback() {
+  return <div className="h-[300px] w-full flex items-center justify-center text-sm text-muted-foreground">Loading chart…</div>;
+}
+
 
 const NUTRIENT_COLORS: Record<string, string> = {
   protein: "#052150",
@@ -87,7 +94,6 @@ export function Dashboard() {
   const { data, isLoading } = useGetDashboard(profileId as number, { query: { enabled: !!profileId, queryKey: getGetDashboardQueryKey(profileId as number) } });
   const { data: profile } = useGetProfile(profileId as number, { query: { enabled: !!profileId, queryKey: getGetProfileQueryKey(profileId as number) } });
   const { data: dailySummary } = useGetDailySummary(profileId as number, undefined, { query: { enabled: !!profileId, queryKey: getGetDailySummaryQueryKey(profileId as number) } });
-  const { data: suggestions } = useGetSuggestions(profileId as number, undefined, { query: { enabled: !!profileId, queryKey: getGetSuggestionsQueryKey(profileId as number) } });
 
   if (!profileId) return null;
 
@@ -327,21 +333,9 @@ export function Dashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyProgress} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Legend />
-                        <Bar dataKey="protein" fill="#3b82f6" name="Protein" />
-                        <Bar dataKey="iron" fill="#ef4444" name="Iron" />
-                        <Bar dataKey="calcium" fill="#10b981" name="Calcium" />
-                        <Bar dataKey="vitaminD" fill="#f59e0b" name="Vitamin D" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <Suspense fallback={<ChartFallback />}>
+                    <NutrientProgressChart data={weeklyProgress} />
+                  </Suspense>
                 </CardContent>
               </Card>
             </div>

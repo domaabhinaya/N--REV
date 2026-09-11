@@ -4,7 +4,22 @@ import { sumNutrients, buildNutrientLines, type FoodNutrients, type NutrientLine
 // AUTHORITATIVE cuisine rule: the generators resolve the cuisine internally (with
 // a permanent "Indian" default) so EVERY caller — recovery plan, re-generation,
 // retry, AI-assisted, API-triggered — is protected even if it passes a raw value.
-import { resolveCuisine } from "./cuisine";
+import { resolveCuisine, type SupportedCuisine } from "./cuisine";
+import { getFoodPoolGeneration } from "./food-lookup";
+
+// Top-N nutrient rankings are pure functions of (food pool, nutrient, dietType,
+// count, cuisine). Cache them so the ~82k x 15 ranking work is done once per
+// unique combination instead of on every request. Keyed by food-pool generation
+// so results are invalidated automatically when the dataset reloads.
+const rankingCache = new Map<string, string[]>();
+function rankingCacheKey(
+  nutrient: NutrientKey,
+  dietType: string,
+  count: number,
+  cuisine: SupportedCuisine | undefined | null,
+): string {
+  return `${getFoodPoolGeneration()}|${nutrient}|${dietType}|${count}|${cuisine ?? ""}`;
+}
 
 export type PlannerFood = FoodRow;
 
@@ -217,6 +232,9 @@ export function topFoodSourcesForNutrient(
 ): string[] {
   // Always apply the authoritative cuisine resolution (defaults to "Indian").
   const cuisine = resolveCuisine(cuisinePreference);
+  const cacheKey = rankingCacheKey(nutrient, dietType, count, cuisine);
+  const cached = rankingCache.get(cacheKey);
+  if (cached) return cached;
   const fieldMap: Record<NutrientKey, keyof PlannerFood> = {
     protein: "protein",
     iron: "iron",
@@ -252,5 +270,7 @@ export function topFoodSourcesForNutrient(
       }
       return 0;
     });
-  return sorted.slice(0, count).map((s) => s.f.name);
+  const result = sorted.slice(0, count).map((s) => s.f.name);
+  rankingCache.set(cacheKey, result);
+  return result;
 }

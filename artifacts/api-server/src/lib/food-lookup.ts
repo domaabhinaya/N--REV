@@ -14,6 +14,14 @@ const FOOD_CACHE_TTL_MS = 30 * 60 * 1000;
 let foodCache: { rows: FoodRow[]; expiresAt: number } | null = null;
 let foodCacheLoad: Promise<FoodRow[]> | null = null;
 
+// Bumped whenever the food pool is refreshed. Consumers that cache
+// ranking/sorting results keyed off the pool include this in their cache key so
+// stale rankings are never served after a dataset reload.
+let foodPoolGeneration = 0;
+export function getFoodPoolGeneration(): number {
+  return foodPoolGeneration;
+}
+
 // Cache for countries and regions to avoid repeated DB queries
 let countriesCache: { data: string[]; expiresAt: number } | null = null;
 let regionsCache: Map<string, { data: string[]; expiresAt: number }> = new Map();
@@ -56,6 +64,7 @@ export async function getAllFoodsForRecommendations(): Promise<FoodRow[]> {
       .orderBy(asc(foodsTable.id))
       .then((all) => {
         foodCache = { rows: all, expiresAt: Date.now() + FOOD_CACHE_TTL_MS };
+        foodPoolGeneration++;
         return all;
       })
       .finally(() => {

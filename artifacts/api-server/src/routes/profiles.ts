@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, profilesTable } from "@workspace/db";
 import { GetProfileParams, UpdateProfileBody } from "@workspace/api-zod";
-import { getPrioritiesWithFoodSources } from "../lib/profile-service";
+import { getPrioritiesWithFoodSources, invalidatePriorityCache } from "../lib/profile-service";
 import { canonicalCuisine } from "../lib/cuisine";
 import type { PlannerFood } from "../lib/meal-planner";
 import { getAllFoodsForRecommendations } from "../lib/food-lookup";
@@ -235,6 +235,9 @@ router.put("/profiles/:profileId", async (req, res): Promise<void> => {
     .set(updateValues)
     .where(eq(profilesTable.id, params.data.profileId))
     .returning();
+
+  // Profile data changed: stale priorities must be dropped before recompute.
+  invalidatePriorityCache(params.data.profileId);
 
   const foods = await loadFoods();
   res.json({

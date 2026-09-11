@@ -15,7 +15,12 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // Build the local listener and the listener-free app. The latter is used
+    // exclusively by Dockerfile.vercel's container launcher.
+    entryPoints: {
+      index: path.resolve(artifactDir, "src/index.ts"),
+      app: path.resolve(artifactDir, "src/app.ts"),
+    },
     platform: "node",
     bundle: true,
     format: "esm",
